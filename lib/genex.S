@@ -51,7 +51,7 @@ NESTED(handle_int, TF_SIZE, sp)
 //1: j 1b
 nop
 
-SAVE_ALL
+SAVE_ALL			// 保存栈帧，把所有的寄存器给保存到栈中
 CLI
 .set	at
 mfc0	t0, CP0_CAUSE
@@ -59,7 +59,8 @@ mfc0	t2, CP0_STATUS
 and	t0, t2
 
 andi	t1, t0, STATUSF_IP4
-bnez	t1, timer_irq
+bnez	t1, timer_irq				// 判断是否支持中断。如果支持中断，则调用time_irq
+
 nop
 END(handle_int)
 

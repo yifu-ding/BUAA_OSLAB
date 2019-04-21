@@ -100,6 +100,10 @@ void env_init(void) {
 	/*Step 1: Initial env_free_list. */
 	LIST_INIT(&env_free_list);
 
+	// 初始化待调度进程控制块链表
+	LIST_INIT(&env_sched_list[0]);
+	LIST_INIT(&env_sched_list[1]);
+
 	/* Step 2: Travel the elements in 'envs', init every element
 	 * (mainly initial its status, mark it as free)
      * and inserts them into the env_free_list as reverse order. */
@@ -161,7 +165,7 @@ env_setup_vm(struct Env* e) {
 	e->env_cr3 = PADDR(pgdir); 		/* 这个变量保存了该进程页目录的物理地址。*/
 	
 	/* VPT and UVPT map the env's own page table, with
- *   * different permissions. */  // question!!!
+ *   * different permissions. */  // question!!!     与系统进程与用户进程有关
 
 	e->env_pgdir[PDX(VPT)] = e->env_cr3;
 	e->env_pgdir[PDX(UVPT)] = e->env_cr3 | PTE_V | PTE_R;
@@ -214,6 +218,7 @@ int env_alloc(struct Env** new, u_int parent_id) /* new: new environment */
      * especially the sp register,CPU status. */
 	e->env_tf.cp0_status = 0x10001004;
 	e->env_tf.regs[29] = USTACKTOP;					// 29 号寄存器是栈寄存器
+	// e->env_tf.regs[28] = KERNEL_SP;
 
 	/*Step 5: Remove the new Env from Env free list*/
 	LIST_REMOVE(e, env_link);
@@ -385,14 +390,14 @@ load_icode(struct Env* e, u_char* binary, u_int size) {
 
 	/*Step 1: alloc a page. */ // 申请一个页
 
-	if(page_alloc(&p) != 0) return -E_NO_MEM;
+	if(page_alloc(&p) != 0) return;
 
 	/*Step 2: Use appropriate perm to set initial stack for new Env. */
 	/*Hint: The user-stack should be writable? */
 	// 用第一步申请的页面来初始化一个进程的栈
 	// 把申请的页p放到USTACKTOP - BY2PG这里
 
-	if(page_insert(e->env_pgdir,p,USTACKTOP - BY2PG,perm) != 0) return -E_NO_MEM; 
+	if(page_insert(e->env_pgdir,p,USTACKTOP - BY2PG,perm) != 0) return; 
 
 	/*Step 3:load the binary by using elf loader. */
 	// 使用load_elf函数将每个segment都加载到正确的地方，并将PC寄存器移动到代码入口地址，即为entry_point，虚地址入口
@@ -433,6 +438,8 @@ void env_create_priority(u_char* binary, int size, int priority) {
 
 	load_icode(e, binary, size);
 
+	//将加载完之后的进程加入等待被调度的链表中
+	LIST_INSERT_HEAD(&env_sched_list[0], e, env_sched_link);
 }
 /* Overview:
  * Allocates a new env with default priority value.

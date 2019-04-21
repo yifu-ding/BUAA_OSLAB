@@ -12,6 +12,7 @@
 #include <asm/regdef.h>
 #include <asm/cp0regdef.h>
 #include <asm/asm.h>
+
 .section .text.exc_vec3
 NESTED(except_vec3, 0, sp)
 		.set	noat

@@ -59,7 +59,7 @@ mfc0	t2, CP0_STATUS
 and	t0, t2
 
 andi	t1, t0, STATUSF_IP4
-bnez	t1, timer_irq				// 判断是否支持中断。如果支持中断，则调用time_irq
+bnez	t1, timer_irq				// 判断是否支持中断。如果支持中断，则调用timer_irq
 
 nop
 END(handle_int)

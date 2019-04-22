@@ -109,7 +109,6 @@ void env_init(void) {
      * and inserts them into the env_free_list as reverse order. */
 	for (i = NENV - 1; i >= 0; i--) {
 		envs[i].env_status = ENV_FREE;
-		LIST_INSERT_HEAD(&env_free_list, &envs[i], env_link);
 	}
 }
 

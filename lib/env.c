@@ -298,11 +298,12 @@ static int load_icode_mapper(u_long va, u_int32_t sgsize,
 		bzero(page2kva(p),sgsize-i);
 	}
 	return 0;
+}
 
 	// ----------------------------------------------------------------------
-	// 应该也是对的
+	// 这样是错的
 	// Step 1: load all content of bin into memory. 
-	for ( ; i < bin_size; i += BY2PG) {
+	/*for ( ; i < bin_size; i += BY2PG) {
 		// Hint: You should alloc a page and increase the reference count of it. 
 		if (page_alloc(&p) < 0) {
 			printf("Sorry,alloc page failed!\n");
@@ -342,7 +343,7 @@ static int load_icode_mapper(u_long va, u_int32_t sgsize,
 	}
 
 	return 0;
-}
+}*/
 
 /* // 解析ELF 文件的函数
 int load_elf(u_char *binary, 				// binary 为整个待加载的ELF 文件。

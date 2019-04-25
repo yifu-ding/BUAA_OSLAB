@@ -4,94 +4,96 @@
 #include <stackframe.h>
 #include <unistd.h>
 
+// 此处的栈指针是内核空间的栈指针
 
 NESTED(handle_sys,TF_SIZE, sp)
+    SAVE_ALL                            // Macro used to save trapframe
+    CLI                                 // Clean Interrupt Mask /* 用于屏蔽中断位的设置的汇编宏*/
+    nop
+    .set at                             // Resume use of $at
 
-SAVE_ALL
-CLI
+    // TODO: Fetch EPC from Trapframe, calculate a proper value and store it back to trapframe.
+	/* TODO: 将Trapframe的EPC寄存器取出，计算一个合理的值存回Trapframe中*/
+    // PC + 4
+	lw      t1,TF_EPC(sp)
+    addiu   t1, 4
+    sw	    t1, TF_EPC(sp)
 
-//1: j 1b
-nop
-.set at
-lw t1, TF_EPC(sp)
-sw      t1, TF_EPC(sp)
-la      t1, sys_call_table
-lw      t2, (t1)
-lw      t0,TF_REG29(sp)
 
-lw      t1, (t0)
-lw      t3, 4(t0)
-lw      t4, 8(t0)
-lw      t5, 12(t0)
-lw      t6, 16(t0)
-lw      t7, 20(t0)
+    // TODO: Copy the syscall number into $a0.
+    /* TODO: 将系统调用号“复制”入寄存器$a0 */
 
-subu    sp, 20
+    lw a0, TF_REG2(sp)
 
-sw      t1, 0(sp)
-sw      t3, 4(sp)
-sw      t4, 8(sp)
-sw      t5, 12(sp)
-sw      t6, 16(sp)
-sw      t7, 20(sp)
+    addiu   a0, a0, -__SYSCALL_BASE     /* a0 <- “相对”系统调用号*/ // a0 <- relative syscall number 
+    sll     t0, a0, 2                   /* t0 <- 相对系统调用号* 4 */ // t0 <- relative syscall number times 4
+    la      t1, sys_call_table          /* t1 <- 系统调用函数的入口表基地址*/ // t1 <- syscall table base
+    addu    t1, t1, t0                  /* t1 <- 特定系统调用函数入口表项地址*/ // t1 <- table entry of specific syscall
+    lw      t2, 0(t1)                   /* t2 <- 特定系统调用函数入口函数地址*/ // t2 <- function entry of specific syscall
+ 	
+    lw      t0, TF_REG29(sp)            /* t0 <- 用户态的栈指针*/ // t0 <- users stack pointer
+    lw      t3, 16(t0)                  /* t3 <- msyscall的第5个参数*/ // t3 <- the 5th argument of msyscall
+    lw      t4, 20(t0)                  /* t4 <- msyscall的第6个参数*/ // t4 <- the 6th argument of msyscall
 
-move    a0, t1
-move    a1, t3
-move    a2, t4
-move    a3, t5
+    // TODO: Allocate a space of six arguments on current kernel stack and copy the six arguments to proper location
+    /* TODO: 在当前栈指针分配6 个参数的存储空间，并将6 个参数安置到期望的位置*/
+	lw t0, TF_REG4(sp)
+    sw t0, 0(sp)
+    lw t0, TF_REG5(sp)
+    sw t0, 4(sp)
+    lw t0, TF_REG6(sp)
+    sw t0, 8(sp)
+    lw t0, TF_REG7(sp)
+    sw t0, 12(sp)
+    sw t3, 16(sp)
+    sw t4, 20(sp)
+    subu sp, 20
+    
 
-jalr    t2
-nop
+    jalr    t2                          /* 调用sys_*函数*/ // Invoke sys_* function
+    nop
+    
+    // TODO: Resume current kernel stack 
+    /* TODO: 恢复栈指针到分配前的状态*/
+    addu 	sp, 20    
 
-addu    sp, 20
+    // Store return value of function sys_* (in $v0) into trapframe
+    /* 将$v0中的sys_*函数返回值存入Trapframe */  
+    sw      v0, TF_REG2(sp)  
 
-sw      v0, TF_REG2(sp)
+    // Return from exeception        
+	/* 从异常中返回（恢复现场） */ 
+    j       ret_from_exception          
+    nop
 
-j       ret_from_exception//extern?
-nop
-
-illegal_syscall: j illegal_syscall
-			nop
 END(handle_sys)
 
-	.extern sys_putchar
-	.extern sys_getenvid
-	.extern sys_yield
-	.extern sys_env_destroy
-	.extern sys_set_pgfault_handler
-	.extern sys_mem_alloc
-	.extern sys_mem_map
-	.extern sys_mem_unmap
-	.extern sys_env_alloc
-	.extern sys_set_env_status
-	.extern sys_set_trapframe
-	.extern sys_panic
-	.extern sys_ipc_can_send
-	.extern sys_ipc_recv
-	.extern sys_cgetc
 
-.macro syscalltable
-.word sys_putchar
-.word sys_getenvid
-.word sys_yield
-.word sys_env_destroy
-.word sys_set_pgfault_handler
-.word sys_mem_alloc
-.word sys_mem_map
-.word sys_mem_unmap
-.word sys_env_alloc
-.word sys_set_env_status
-.word sys_set_trapframe
-.word sys_panic
-.word sys_ipc_can_send
-.word sys_ipc_recv
-.word sys_cgetc
-.endm
+sys_call_table:                         /* 系统调用函数的入口表*/ // Syscall Table 
+.align 2
+    .word sys_putchar
+    .word sys_getenvid
+    .word sys_yield
+    .word sys_env_destroy
+    .word sys_set_pgfault_handler
+    .word sys_mem_alloc
+    .word sys_mem_map
+    .word sys_mem_unmap
+    .word sys_env_alloc
+    .word sys_set_env_status
+    .word sys_set_trapframe
+    .word sys_panic
+    .word sys_ipc_can_send
+    .word sys_ipc_recv
+    .word sys_cgetc
+    /* 每一个整字都将初值设定为对应sys_*函数的地址*/
+	/* 在此处增加内核系统调用的入口地址*/
 
 
-EXPORT(sys_call_table)
-syscalltable
-.size sys_call_table, . - sys_call_table 
+//EXPORT(sys_call_table)
+//	sys_call_table
+
+// .size sys_call_table, . - sys_call_table???
 
 
 

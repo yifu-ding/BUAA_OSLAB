@@ -48,7 +48,6 @@ NESTED(handle_sys,TF_SIZE, sp)
     sw t3, 16(sp)
     sw t4, 20(sp)
     subu sp, 20
-    
 
     jalr    t2                          /* 调用sys_*函数*/ // Invoke sys_* function
     nop

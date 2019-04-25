@@ -65,7 +65,7 @@ u_int sys_getenvid(void)
  * Post-Condition:
  * 	Deschedule current environment. This function will never return.
  */
-// 实现用户进程对CPU 的放弃
+// 实现用户进程对CPU的放弃
 // 另外为了通过我们之前编写的进程切换机制保存现场，
 // 这里需要在KERNEL_SP和TIMESTACK上做一点准备工作
 void sys_yield(void)

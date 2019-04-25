@@ -218,7 +218,6 @@ int env_alloc(struct Env** new, u_int parent_id) /* new: new environment */
      * especially the sp register,CPU status. */
 	e->env_tf.cp0_status = 0x10001004;
 	e->env_tf.regs[29] = USTACKTOP;					// 29 号寄存器是栈寄存器
-	// e->env_tf.regs[28] = KERNEL_SP;
 
 	/*Step 5: Remove the new Env from Env free list*/
 	LIST_REMOVE(e, env_link);
@@ -300,50 +299,6 @@ static int load_icode_mapper(u_long va, u_int32_t sgsize,
 	return 0;
 }
 
-	// ----------------------------------------------------------------------
-	// 应该也是对的
-	// Step 1: load all content of bin into memory. 
-	/*for ( ; i < bin_size; i += BY2PG) {
-		// Hint: You should alloc a page and increase the reference count of it. 
-		if (page_alloc(&p) < 0) {
-			printf("Sorry,alloc page failed!\n");
-			return -E_NO_MEM;
-		}
-		p->pp_ref++;
-		page_insert(pgdir, p, ROUND(va, BY2PG) + i, PTE_R);
-        bcopy(bin + i, page2kva(p), BY2PG);
-	}
-
-
-	if(bin_size > i){			// ????? bin_size must be greater than i
-		page_alloc(&p);
-		page_insert(pgdir,p,ROUND(va, BY2PG) + i, PTE_R);
-		bcopy(bin + i, page2kva(p), bin_size - i);
-		i += BY2PG;
-	}
-
-	//Step 2: alloc pages to reach `sgsize` when `bin_size` < `sgsize`.
-    //i has the value of `bin_size` now. 
-	while (i < sgsize) {
-		if(page_alloc(&p) < 0){
-			return -E_NO_MEM;
-		}
-		p->pp_ref++;
-		if(page_insert(pgdir, p, ROUND(va, BY2PG) + i, PTE_R) < 0){
-			return -E_NO_MEM;
-		}
-		bzero(page2kva(p),BY2PG);
-		i += BY2PG;
-	}
-
-	if(sgsize>i){
-		page_alloc(&p);
-		page_insert(pgdir,p,ROUND(va, BY2PG) + i,PTE_R);
-		bzero(page2kva(p),sgsize-i);
-	}
-
-	return 0;
-}*/
 
 /* // 解析ELF 文件的函数
 int load_elf(u_char *binary, 				// binary 为整个待加载的ELF 文件。
@@ -507,8 +462,8 @@ void env_destroy(struct Env* e) {
 	if (curenv == e) {
 		curenv = NULL;
 		/* Hint:Why this? */
-		bcopy((void*)KERNEL_SP - sizeof(struct Trapframe),
-			  (void*)TIMESTACK - sizeof(struct Trapframe),
+		bcopy((void*)(KERNEL_SP - sizeof(struct Trapframe)),
+			  (void*)(TIMESTACK - sizeof(struct Trapframe)),
 			  sizeof(struct Trapframe));
 		printf("i am killed ... \n");
 		sched_yield();

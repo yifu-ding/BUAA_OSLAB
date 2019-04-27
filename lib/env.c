@@ -538,9 +538,10 @@ void env_run(struct Env* e) {
 
     struct Trapframe *old = (struct Trapframe *)(TIMESTACK - sizeof(struct Trapframe));
     // 中断之后应该跳转的地址
-    if(curenv != NULL && curenv != e){
-    	curenv->env_tf = *old;
-    	curenv->env_tf.pc = curenv->env_tf.cp0_epc; 
+    // if(curenv != NULL && curenv != e){
+    if (curenv) {
+    	bcopy(old, &curenv->env_tf, sizeof(struct Tramframe));
+        curenv->env_tf.pc = old->cp0_epc;
     }
 
 	/*Step 2: Set 'curenv' to the new environment. */

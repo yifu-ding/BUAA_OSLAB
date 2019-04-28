@@ -18,22 +18,23 @@ void sched_yield(void)
     static int pos = 0;
     static int times = 0;
     static struct Env *e;
-    if(--times<=0 || curenv == NULL || curenv->env_status!=ENV_RUNNABLE)
-    {
-        if(LIST_EMPTY(&env_sched_list[pos]))
-        {
+    while (--times<=0 || curenv == NULL || curenv->env_status!=ENV_RUNNABLE) {
+        if(LIST_EMPTY(&env_sched_list[pos])) {
             pos = 1 - pos;
         }
         e = LIST_FIRST(&env_sched_list[pos]);
         if(e == NULL)
-            while(1);
-        LIST_REMOVE(e, env_sched_link);
-        LIST_INSERT_HEAD(&env_sched_list[1-pos], e, env_sched_link);
-
-        times = e->env_pri;
+            continue;
+        else {
+            LIST_REMOVE(e, env_sched_link);
+            LIST_INSERT_HEAD(&env_sched_list[1-pos], e, env_sched_link);
+            times = e->env_pri;
+            break;
+        }
     }
     env_run(e);
 }
+
 
 
 /*void sched_yield(void)

@@ -346,6 +346,7 @@ int sys_set_env_status(int sysno, u_int envid, u_int status)
 	if(envid2env(envid, &env, PTE_V) < 0) return -E_INVAL;
 
 	env->env_status = status;
+	// 启动子进程
 	LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
 
 	return 0;
@@ -440,7 +441,6 @@ void sys_ipc_recv(int sysno, u_int dstva)
 int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 					 u_int perm)
 {
-
 	int r;
 	struct Env *e;
 	struct Page *p;
@@ -450,7 +450,7 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 	// 检查地址
 	if (srcva >= UTOP || srcva < 0) return -E_INVAL;
 	// 检查进程号是否正确
-    if (envid2env(envid, &e, 0) < 0) return -E_INVAL;
+    if (envid2env(envid, &e, 1) < 0) return -E_INVAL;
     // 检查接收进程是否接收
     if (e->env_ipc_recving == 0) return -E_IPC_NOT_RECV;
 

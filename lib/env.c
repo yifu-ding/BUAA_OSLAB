@@ -213,6 +213,7 @@ int env_alloc(struct Env** new, u_int parent_id) /* new: new environment */
 	e->env_id = mkenvid(e);
 	e->env_status = ENV_RUNNABLE;
 	e->env_parent_id = parent_id;
+	e->env_ipc_recving = 0;
 
 	/*Step 4: focus on initializing env_tf structure, located at this new Env.
      * especially the sp register,CPU status. */
@@ -492,11 +493,10 @@ void env_run(struct Env* e) {
     // old: 当前进程的上下文所存放的区域
 
     struct Trapframe *old = (struct Trapframe *)(TIMESTACK - sizeof(struct Trapframe));
-    // 中断之后应该跳转的地址
-    if(curenv != NULL && curenv != e){
-    	curenv->env_tf = *old;
-    	curenv->env_tf.pc = curenv->env_tf.cp0_epc; 
-    }
+    if(curenv){
+        bcopy(old, &curenv->env_tf, sizeof(struct Trapframe));
+        curenv->env_tf.pc = old->cp0_epc;
+   	}
 
 	/*Step 2: Set 'curenv' to the new environment. */
 

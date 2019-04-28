@@ -37,17 +37,24 @@ NESTED(handle_sys,TF_SIZE, sp)
 
     // TODO: Allocate a space of six arguments on current kernel stack and copy the six arguments to proper location
     /* TODO: 在当前栈指针分配6 个参数的存储空间，并将6 个参数安置到期望的位置*/
-	lw t0, TF_REG4(sp)
-    sw t0, 0(sp)
-    lw t0, TF_REG5(sp)
-    sw t0, 4(sp)
-    lw t0, TF_REG6(sp)
-    sw t0, 8(sp)
-    lw t0, TF_REG7(sp)
-    sw t0, 12(sp)
-    sw t3, 16(sp)
-    sw t4, 20(sp)
-    subu sp, 20
+	lw      t5, TF_REG4(sp)
+    lw      t6, TF_REG5(sp)
+    lw      t7, TF_REG6(sp)
+    lw      t8, TF_REG7(sp)
+    
+    addiu sp,sp,-20
+    
+    sw      t5, (sp)
+    sw      t6, 4(sp)
+    sw      t7, 8(sp)
+    sw      t8, 12(sp)
+    sw      t3, 16(sp)
+    sw      t4, 20(sp)
+    
+    move a0, t5
+    move a1, t6
+    move a2, t7
+    move a3, t8
 
     jalr    t2                          /* 调用sys_*函数*/ // Invoke sys_* function
     nop

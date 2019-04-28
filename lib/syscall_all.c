@@ -71,9 +71,9 @@ u_int sys_getenvid(void)
 void sys_yield(void)
 {
 	//类似于env_destroy，保存kernel_sp中的Trapframe，随后执行sched_yield;
-	bcopy((void*)(KERNEL_SP-sizeof(struct Trapframe)),
-			(void*)(TIMESTACK-sizeof(struct Trapframe)),
-			sizeof(struct Trapframe));
+	struct Trapframe *src = (struct Trapframe *)(KERNEL_SP - sizeof(struct Trapframe));
+    struct Trapframe *dst = (struct Trapframe *)(TIMESTACK - sizeof(struct Trapframe));
+    bcopy((void *)src, (void *)dst, sizeof(struct Trapframe));
 	sched_yield();
 }
 
@@ -120,11 +120,14 @@ int sys_env_destroy(int sysno, u_int envid)
 int sys_set_pgfault_handler(int sysno, u_int envid, u_int func, u_int xstacktop)
 {
 	// Your code here.
-	struct Env *env;
-	int ret;
-
-
-	return 0;
+    struct Env *env;
+    int ret;
+  
+    if (envid2env(envid,&env,PTE_V) < 0) return -E_INVAL;
+    env->env_xstacktop = xstacktop;
+    env->env_pgfault_handler = func;
+ 
+    return 0;
 	//	panic("sys_set_pgfault_handler not implemented");
 }
 
@@ -170,14 +173,25 @@ int sys_mem_alloc(int sysno, u_int envid, u_int va, u_int perm)
  *         other bits are optional.
  * va must be < UTOP
  */
-	if(!(perm & PTE_V) || (perm & PTE_COW) || va >= UTOP) return -E_INVAL;
-	ret = envid2env(envid, &env, 0);
+	/*if(!(perm & PTE_V) || (perm & PTE_COW) || va >= UTOP) return -E_INVAL;
+	ret = envid2env(envid, &env, 1);
 	if(ret != 0) return ret;
 	ret = page_alloc(&ppage);
 	if(ret != 0) return ret;
 	ret = page_insert(env->env_pgdir, ppage, va, perm);
 	if(ret != 0) return ret;
-	return ret; // ret = 0;
+	return ret; // ret = 0;*/
+
+	//首先满足基本条件，va不在范围
+    if(va >= UTOP || va < 0) return -E_UNSPECIFIED;
+    // PTE_V is required,PTE_COW is not allowed
+    if ((perm & PTE_COW) || ((perm & PTE_V)==0) ) return -E_INVAL;
+    if ((ret = envid2env(envid,&env,1))!=0) return ret;
+    if ((ret = page_alloc(&ppage))!=0) return ret;
+    //page_insert中已经隐含unmapping操作,无需我们再动手
+    if ((ret = page_insert(env->env_pgdir,ppage,va,perm))!=0) return ret;
+    ret = 0;
+    return ret;
 
 }
 
@@ -225,22 +239,27 @@ int sys_mem_map(int sysno, u_int srcid, u_int srcva, u_int dstid, u_int dstva,
  *         other bits are optional.
  * va must be < UTOP
  */
-	if(!(perm & PTE_COW) || dstva >= UTOP) return -E_INVAL;
-	ret = envid2env(srcid, &srcenv, 0);
-	if(ret != 0) return ret;
-	ret = envid2env(dstid, &dstenv, 0);
-	if(ret != 0) return ret;
+	if (!(perm & PTE_V)) return -E_INVAL;
+	// if ((perm & PTE_COW)) return -E_INVAL;
+
+	// 地址非法
+	if (srcva >= UTOP || dstva >= UTOP || srcva < 0 || dstva < 0) 
+		return -E_UNSPECIFIED;
+
+	// 两个进程必须都有效
+	ret = envid2env(srcid, &srcenv, 1);
+	if(ret != 0) return -E_BAD_ENV;
+	ret = envid2env(dstid, &dstenv, 1);
+	if(ret != 0) return -E_BAD_ENV;
 
 	// 获取srcva映射的page
-	ppage = pa2page(va2pa(srcenv->env_pgdir,srcva));//获取srcva映射的page
-	// ppage = page_lookup(srcenv->env_pgdir, srcva, &ppte); 
-	// 获取srcva对应的页表项 
-	pgdir_walk(srcenv->env_pgdir, srcva, 0, &ppte);
-	if((ppte != NULL) && (((*ppte) & PTE_R) == 0) && ((perm & PTE_R) != 0)) 
-		return -E_INVAL;
-	// 共享一页物理内存
-	ret = page_insert(dstenv->env_pgdir, ppage, dstva, perm);
-	if(ret != 0) return ret;
+	if ((ppage = page_lookup(srcenv -> env_pgdir, round_srcva, &ppte)) == 0) 
+		return -E_UNSPECIFIED;
+	// 企图从不可写映射到可写，返回错误
+//	if((ppte != NULL) && (((*ppte) & PTE_R) == 0) && ((perm & PTE_R) != 0)) 
+//		return -E_INVAL;
+	ret = page_insert(dstenv->env_pgdir, ppage, round_dstva, perm);
+	if(ret != 0) return -E_NO_MEM;
 
 	return ret;// ret = 0;
 
@@ -260,10 +279,10 @@ int sys_mem_unmap(int sysno, u_int envid, u_int va)
 	// Your code here.
 	int ret = 0;
 	struct Env *env;
-	if(va >= UTOP) return -E_INVAL;
-	ret = envid2env(envid, &env, 0);
-	if(!ret) return ret;
-	// unmap
+	if(va >= UTOP || va < 0) return -E_INVAL;
+	ret = envid2env(envid, &env, 1);
+	if(ret != 0) return ret;
+	// 直接调用page_remove的unmap功能
 	page_remove(env->env_pgdir, va);
 	return ret;
 	//	panic("sys_mem_unmap not implemented");
@@ -287,6 +306,16 @@ int sys_env_alloc(void)
 	int r;
 	struct Env *e;
 
+	if(env_alloc(&e, curenv->env_id) < 0) {
+		return -E_NO_FREE_ENV;
+	}
+
+	e->env_status = ENV_NOT_RUNNABLE;
+	// 把栈里的东西搬到新开的进程e的tf中
+	bcopy((void*)KERNEL_SP - sizeof(struct Trapframe), &(e->env_tf), sizeof(struct Trapframe));
+	e->env_tf.pc = e->env_tf.cp0_epc;
+	e->env_tf.regs[2] = 0;
+	e->env_pri = curenv->env_pri;
 
 	return e->env_id;
 	//	panic("sys_env_alloc not implemented");
@@ -310,6 +339,15 @@ int sys_set_env_status(int sysno, u_int envid, u_int status)
 	struct Env *env;
 	int ret;
 
+	// Pre-Condition
+	if (status != ENV_RUNNABLE && status != ENV_NOT_RUNNABLE && status != ENV_FREE) {
+		return -E_INVAL;
+	}
+	if(envid2env(envid, &env, PTE_V) < 0) return -E_INVAL;
+
+	env->env_status = status;
+	LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
+
 	return 0;
 	//	panic("sys_env_set_status not implemented");
 }
@@ -328,6 +366,12 @@ int sys_set_env_status(int sysno, u_int envid, u_int status)
  */
 int sys_set_trapframe(int sysno, u_int envid, struct Trapframe *tf)
 {
+	struct Env *env;
+    int ret;
+    if(ret=envid2env(envid,&env,0)) {
+        return ret;
+    }
+    env->env_tf=*tf;
 
 	return 0;
 }
@@ -368,7 +412,9 @@ void sys_ipc_recv(int sysno, u_int dstva)
 	curenv->env_ipc_recving = 1;
 	// 之后阻塞当前进程，即将当前进程的状态置为不可运行
 	curenv->env_status = ENV_NOT_RUNNABLE;
+	// env_ipc_dstva 则说明了接收到的页需要被映射到哪个虚地址上
 	curenv->env_ipc_dstva = dstva;
+	LIST_REMOVE(curenv, env_sched_link);
 
 	// 之后放弃CPU（调用相关函数重新进行调度）
 	sys_yield();
@@ -398,64 +444,31 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 	int r;
 	struct Env *e;
 	struct Page *p;
-
-	r = envid2env(envid, &e, 0);
-	if(r != 0) return r;
-	if(e->env_ipc_recving != 1) return -E_IPC_NOT_RECV;
-	// 清除接收进程的接收状态, 
-	//env_ipc_recving is set to 0 to block future sends
-	e->env_ipc_recving = 0;
-	// env_ipc_from is set to the sending envid
-	e->env_ipc_from = curenv->env_id;
-	// env_ipc_value is set to the 'value' parameter
-	e->env_ipc_value = value;
-	// ?????
-	if (srcva != 0) {
-		r = sys_mem_map(sysno,curenv->env_id,srcva,envid,e->env_ipc_dstva,perm);
-		if(r != 0) return r;
-		e->env_ipc_perm = perm;
-	}
-	// 使其可运行
-	e->env_status = ENV_RUNNABLE;
-
-
-	return 0;
-}
-/*
-	//int r;
-	struct Env *e;
-	struct Page *p;
 	Pte *ppte;
-	perm = perm|PTE_V;
-	if(srcva<0){
-		printf("in sys_ipc_can_send found va is 0\n");
-		return -E_IPC_NOT_RECV;
-	}
-	if(srcva>=UTOP){
-		printf("Sorry,in sys_ipc_can_send srcva %x need <UTOP %x.\n",srcva,UTOP);
-		return -E_INVAL;
-	}
-	if(envid2env(envid,&e,0)<0){
-		printf("Sorry,in sys_ipc_can_send the envid can't found the env.envid is:%d\n",envid);
-		return -E_INVAL;
-	}
-	if(e->env_ipc_recving==0){
-		//printf("Sorry,in sys_ipc_can_send we found env_ipc_recving is 0.\n");
-		return -E_IPC_NOT_RECV;
-	}
-	if((p=page_lookup(curenv->env_pgdir,srcva,0))<=0){
-		printf("send srcva is not exist.srcva is:%x\n",srcva,srcva);
-	}else if(page_insert(e->env_pgdir,p,e->env_ipc_dstva,perm)<0){
-		printf("dst pot failed.\n");
-		return -E_INVAL;
-	}
+	perm |= PTE_V;
 
-	// if judge success
-	e->env_ipc_perm = perm;
-	e->env_ipc_recving = 0;
-	e->env_status = ENV_RUNNABLE;
-	e->env_ipc_value = value;
-	e->env_ipc_from = curenv->env_id;
-	return 0;
+	// 检查地址
+	if (srcva >= UTOP || srcva < 0) return -E_INVAL;
+	// 检查进程号是否正确
+    if (envid2env(envid, &e, 0) < 0) return -E_INVAL;
+    // 检查接收进程是否接收
+    if (e->env_ipc_recving == 0) return -E_IPC_NOT_RECV;
 
-*/
+	if (srcva != 0) {
+	    p = page_lookup(curenv->env_pgdir, srcva, &ppte);
+    	if((*ppte & PTE_R)==0 && (perm & PTE_R))
+                printf("Permission Denied\n");
+            if((r = page_insert(e->env_pgdir, p, e->env_ipc_dstva, perm) < 0)){
+                printf("page insert failed in ipc_send");
+                return r;
+            }   
+    }   
+        
+    e->env_ipc_perm = perm;
+    e->env_ipc_recving = 0;
+    e->env_status = ENV_RUNNABLE;
+    e->env_ipc_value = value;
+    e->env_ipc_from = curenv->env_id;
+    LIST_INSERT_HEAD(&env_sched_list[0], e, env_sched_link);
+    return 0;
+}

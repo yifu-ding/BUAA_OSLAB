@@ -11,7 +11,32 @@
  * Hints:
  *  The variable which is for counting should be defined as 'static'.
  */
+
 void sched_yield(void)
+{
+    int i;
+    static int pos = 0;
+    static int times = 0;
+    static struct Env *e;
+    if(--times<=0 || curenv == NULL || curenv->env_status!=ENV_RUNNABLE)
+    {
+        if(LIST_EMPTY(&env_sched_list[pos]))
+        {
+            pos = 1 - pos;
+        }
+        e = LIST_FIRST(&env_sched_list[pos]);
+        if(e == NULL)
+            while(1);
+        LIST_REMOVE(e, env_sched_link);
+        LIST_INSERT_HEAD(&env_sched_list[1-pos], e, env_sched_link);
+
+        times = e->env_pri;
+    }
+    env_run(e);
+}
+
+
+/*void sched_yield(void)
 {
     // 记录当前进程已经使用的时间片数目
     static int count = 0;
@@ -23,7 +48,7 @@ void sched_yield(void)
      * 1. 当前进程时NULL，这种情况只发生在运行第一个进程的时候
      * 2. 当前进程的时间片已经用完了
     */
-    if(curenv == NULL || count >= curenv->env_pri) {
+  /*  if(curenv == NULL || count >= curenv->env_pri) {
         // 如果不是第一次运行进程，则要将当前进程添加到另一个待调度队列中以便下一次调度
         if(curenv != NULL) {
             LIST_INSERT_HEAD(&env_sched_list[1 - t], curenv, env_sched_link);
@@ -53,6 +78,7 @@ void sched_yield(void)
         env_run(curenv);
     }
 }
+*/
 
 /*我们在这里将优先级设置为时间片大小: 1 表示1 个时间片长度, 2 表示2 个时间片长度，以此类推。
 不过寻找就绪状态进程不是简单遍历进程链表, 而是用两个链表存储所有就绪状态进程。

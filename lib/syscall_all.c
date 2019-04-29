@@ -247,9 +247,9 @@ int sys_mem_map(int sysno, u_int srcid, u_int srcva, u_int dstid, u_int dstva,
 		return -E_UNSPECIFIED;
 
 	// 两个进程必须都有效
-	ret = envid2env(srcid, &srcenv, 1);
+	ret = envid2env(srcid, &srcenv, 0);
 	if(ret != 0) return -E_BAD_ENV;
-	ret = envid2env(dstid, &dstenv, 1);
+	ret = envid2env(dstid, &dstenv, 0);
 	if(ret != 0) return -E_BAD_ENV;
 
 	// 获取srcva映射的page
@@ -280,7 +280,7 @@ int sys_mem_unmap(int sysno, u_int envid, u_int va)
 	int ret = 0;
 	struct Env *env;
 	if(va >= UTOP || va < 0) return -E_INVAL;
-	ret = envid2env(envid, &env, 1);
+	ret = envid2env(envid, &env, 0);
 	if(ret != 0) return ret;
 	// 直接调用page_remove的unmap功能
 	page_remove(env->env_pgdir, va);
@@ -450,7 +450,7 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 	// 检查地址
 	if (srcva >= UTOP || srcva < 0) return -E_INVAL;
 	// 检查进程号是否正确
-    if (envid2env(envid, &e, 1) < 0) return -E_INVAL;
+    if (envid2env(envid, &e, 0) < 0) return -E_INVAL;
     // 检查接收进程是否接收
     if (e->env_ipc_recving == 0) return -E_IPC_NOT_RECV;
 

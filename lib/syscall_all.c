@@ -124,6 +124,7 @@ int sys_set_pgfault_handler(int sysno, u_int envid, u_int func, u_int xstacktop)
     int ret;
   
     if (envid2env(envid,&env,PTE_V) < 0) return -E_INVAL;
+    // 使得发生COW类型缺页中断时可以在正确的栈里调用正确的处理函数。
     env->env_xstacktop = xstacktop;
     env->env_pgfault_handler = func;
  
@@ -246,18 +247,19 @@ int sys_mem_map(int sysno, u_int srcid, u_int srcva, u_int dstid, u_int dstva,
 	if (srcva >= UTOP || dstva >= UTOP || srcva < 0 || dstva < 0) 
 		return -E_UNSPECIFIED;
 
-	// 两个进程必须都有效
-	ret = envid2env(srcid, &srcenv, 0);
+	// 两个进程必须都有效，而且必须是父子关系。
+	// 如果send使用mem_map，这里checkperm不能为1
+	ret = envid2env(srcid, &srcenv, 1);
 	if(ret != 0) return -E_BAD_ENV;
-	ret = envid2env(dstid, &dstenv, 0);
+	ret = envid2env(dstid, &dstenv, 1);
 	if(ret != 0) return -E_BAD_ENV;
 
 	// 获取srcva映射的page
 	if ((ppage = page_lookup(srcenv -> env_pgdir, round_srcva, &ppte)) == 0) 
 		return -E_UNSPECIFIED;
 	// 企图从不可写映射到可写，返回错误
-//	if((ppte != NULL) && (((*ppte) & PTE_R) == 0) && ((perm & PTE_R) != 0)) 
-//		return -E_INVAL;
+	if((ppte != NULL) && (((*ppte) & PTE_R) == 0) && ((perm & PTE_R) != 0)) 
+		return -E_INVAL;
 	ret = page_insert(dstenv->env_pgdir, ppage, round_dstva, perm);
 	if(ret != 0) return -E_NO_MEM;
 
@@ -312,6 +314,7 @@ int sys_env_alloc(void)
 
 	e->env_status = ENV_NOT_RUNNABLE;
 	// 把栈里的东西搬到新开的进程e的tf中
+	// 从内核栈拷贝栈帧到进程控制块中
 	bcopy((void*)KERNEL_SP - sizeof(struct Trapframe), &(e->env_tf), sizeof(struct Trapframe));
 	e->env_tf.pc = e->env_tf.cp0_epc;
 	e->env_tf.regs[2] = 0;
@@ -347,7 +350,8 @@ int sys_set_env_status(int sysno, u_int envid, u_int status)
 
 	env->env_status = status;
 	// 启动子进程
-	LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
+	if(status==ENV_RUNNABLE) 
+		LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
 
 	return 0;
 	//	panic("sys_env_set_status not implemented");
@@ -441,7 +445,6 @@ void sys_ipc_recv(int sysno, u_int dstva)
 int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 					 u_int perm)
 {
-	int r;
 	struct Env *e;
 	struct Page *p;
 	Pte *ppte;

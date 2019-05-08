@@ -61,7 +61,7 @@ nop
 	lw	a0, TF_BADVADDR(sp)
 	//sw	t0, (sp)
 	//subu	sp,16
-	lw	t1, __pgfault_handler
+	lw	t1, __pgfault_handler //重点，跳转到处理函数
 	jalr	t1
 
 nop

@@ -43,28 +43,27 @@ struct pgfault_trap_frame{
 void
 page_fault_handler(struct Trapframe *tf)
 {
-        u_int va;
-        u_int *tos, d;
+    u_int va;
+    u_int *tos, d;
 	struct Trapframe PgTrapFrame;
 	extern struct Env * curenv;
-//printf("^^^^cp0_BadVAddress:%x\n",tf->cp0_badvaddr);
+	//printf("^^^^cp0_BadVAddress:%x\n",tf->cp0_badvaddr);
 
 	
 	bcopy(tf, &PgTrapFrame,sizeof(struct Trapframe));
-	if(tf->regs[29] >= (curenv->env_xstacktop - BY2PG) && tf->regs[29] <= (curenv->env_xstacktop - 1))
-	{
+	if(tf->regs[29] >= (curenv->env_xstacktop - BY2PG) && tf->regs[29] <= (curenv->env_xstacktop - 1)) {
 		//panic("fork can't nest!!");
+		// 如果不是第一次用这个栈，指针sp已经在这个栈里了，那就sp-sizeof(tf)开辟一段空间
 		tf->regs[29] = tf->regs[29] - sizeof(struct  Trapframe);
 		bcopy(&PgTrapFrame, tf->regs[29], sizeof(struct Trapframe));
 	}
-	else
-	{
-		
+	else {
+		// 如果是第一次用这个栈，就从栈顶开始减
 		tf->regs[29] = curenv->env_xstacktop - sizeof(struct  Trapframe);
-//		printf("page_fault_handler(): bcopy(): src:%x\tdes:%x\n",(int)&PgTrapFrame,(int)(curenv->env_xstacktop - sizeof(struct  Trapframe)));
+	//		printf("page_fault_handler(): bcopy(): src:%x\tdes:%x\n",(int)&PgTrapFrame,(int)(curenv->env_xstacktop - sizeof(struct  Trapframe)));
 		bcopy(&PgTrapFrame, curenv->env_xstacktop - sizeof(struct  Trapframe), sizeof(struct Trapframe));
 	}
-//	printf("^^^^cp0_epc:%x\tcurenv->env_pgfault_handler:%x\n",tf->cp0_epc,curenv->env_pgfault_handler);
+	//	printf("^^^^cp0_epc:%x\tcurenv->env_pgfault_handler:%x\n",tf->cp0_epc,curenv->env_pgfault_handler);
 
 	tf->cp0_epc = curenv->env_pgfault_handler;
 	

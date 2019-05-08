@@ -22,8 +22,10 @@ set_pgfault_handler(void (*fn)(u_int va))
 		// Your code here:
 		// map one page of exception stack with top at UXSTACKTOP
 		// register assembly handler and stack with operating system
+		// 为自身分配映射了异常处理栈
 		if (syscall_mem_alloc(0, UXSTACKTOP - BY2PG, PTE_V | PTE_R) < 0 ||
 			syscall_set_pgfault_handler(0, __asm_pgfault_handler, UXSTACKTOP) < 0) {
+			// __asm_pgfault是中转，将参数传进去
 			writef("cannot set pgfault handler\n");
 			return;
 		}

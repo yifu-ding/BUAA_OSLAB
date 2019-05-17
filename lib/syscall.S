@@ -93,3 +93,7 @@ sys_call_table:                         /* 系统调用函数的入口表*/ // S
     .word sys_ipc_recv
     .word sys_cgetc
 
+    .word sys_write_dev
+    .word sys_read_dev
+
+

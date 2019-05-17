@@ -475,3 +475,79 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
     LIST_INSERT_HEAD(&env_sched_list[0], e, env_sched_link);
     return 0;
 }
+
+/* Overview:
+ * 	This function is used to write data to device, which is
+ * 	represented by its mapped physical address.
+ *	Remember to check the validity of device address (see Hint below);
+ * 
+ * Pre-Condition:
+ *      'va' is the startting address of source data, 'len' is the
+ *      length of data (in bytes), 'dev' is the physical address of
+ *      the device
+ * 	
+ * Post-Condition:
+ *      copy data from 'va' to 'dev' with length 'len'
+ *      Return 0 on success.
+ *	Return -E_INVAL on address error.
+ *      
+ * Hint: Use ummapped segment in kernel address space to perform MMIO.
+ *	 Physical device address:
+ *	* ---------------------------------*
+ *	|   device   | start addr | length |
+ *	* -----------+------------+--------*
+ *	|  console   | 0x10000000 | 0x20   |
+ *	|    IDE     | 0x13000000 | 0x4200 |
+ *	|    rtc     | 0x15000000 | 0x200  |
+ *	* ---------------------------------*
+ */
+int sys_write_dev(int sysno, u_int va, u_int dev, u_int len)
+{
+    // Your code here
+        int flag = 0;
+        if (dev >= 0x10000000 && dev + len <= 0x10000020) flag = 1;
+        if (dev >= 0x13000000 && dev + len <= 0x13004200) flag = 1;
+        if (dev >= 0x15000000 && dev + len <= 0x15000200) flag = 1;
+        if (!flag) {
+                return -E_INVAL;
+        }
+        memcpy(dev + 0xa0000000, va, len);
+        return 0;
+}
+
+
+/* Overview:
+ * 	This function is used to read data from device, which is
+ * 	represented by its mapped physical address.
+ *	Remember to check the validity of device address (same as sys_read_dev)
+ * 
+ * Pre-Condition:
+ *      'va' is the startting address of data buffer, 'len' is the
+ *      length of data (in bytes), 'dev' is the physical address of
+ *      the device
+ * 
+ * Post-Condition:
+ *      copy data from 'dev' to 'va' with length 'len'
+ *      Return 0 on success, < 0 on error
+ *      
+ * Hint: Use ummapped segment in kernel address space to perform MMIO.
+ */
+
+int sys_read_dev(int sysno, u_int va, u_int dev, u_int len)
+{
+    // Your code here
+        int flag = 0;
+        if (dev >= 0x10000000 && dev + len <= 0x10000020) flag = 1;
+        if (dev >= 0x13000000 && dev + len <= 0x13004200) flag = 1;
+        if (dev >= 0x15000000 && dev + len <= 0x15000200) flag = 1;
+        if (!flag) {
+                return -E_INVAL;
+        }
+        memcpy(va, dev + 0xa0000000, len);
+        return 0;
+}
+
+
+
+
+

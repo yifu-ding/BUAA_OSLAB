@@ -23,15 +23,17 @@
 
 #define MAXFILESIZE	(NINDIRECT*BY2BLK)
 
+#define BY2FILE     256
+
 struct File {
 	u_char f_name[MAXNAMELEN];	// filename
 	u_int f_size;			// file size in bytes
 	u_int f_type;			// file type
-	u_int f_direct[NDIRECT];
-	u_int f_indirect;
+	u_int f_direct[NDIRECT]; // 10个直接指针
+	u_int f_indirect; // 间接指针，不使用前10个指针。
 
-	struct File *f_dir;		// valid only in memory
-	u_char f_pad[256-MAXNAMELEN-4-4-NDIRECT*4-4-4];
+	struct File *f_dir;		// the pointer to the dir where this file is in, valid only in memory.
+	u_char f_pad[BY2FILE - MAXNAMELEN - 4 - 4 - NDIRECT * 4 - 4 - 4];
 };
 
 #define FILE2BLK	(BY2BLK/sizeof(struct File))

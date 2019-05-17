@@ -511,7 +511,8 @@ int sys_write_dev(int sysno, u_int va, u_int dev, u_int len)
         if (!flag) {
                 return -E_INVAL;
         }
-        memcpy(dev + 0xa0000000, va, len);
+//        memcpy(dev + 0xa0000000, va, len);
+         bcopy((void *)va, (void *)(0xa0000000 + dev), len);
         return 0;
 }
 
@@ -543,7 +544,8 @@ int sys_read_dev(int sysno, u_int va, u_int dev, u_int len)
         if (!flag) {
                 return -E_INVAL;
         }
-        memcpy(va, dev + 0xa0000000, len);
+//        memcpy(va, dev + 0xa0000000, len);
+         bcopy((void *)(0xa0000000 + dev), (void *)va, len);
         return 0;
 }
 
